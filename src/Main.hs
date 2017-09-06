@@ -16,5 +16,3 @@ main = do
 
 startLoop :: IO ()
 startLoop = void (L.loop $ return (M.emptyBoard, L.playersStandard))
-
-otherLoop ::

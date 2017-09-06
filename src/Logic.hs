@@ -23,9 +23,6 @@ type PlayerFunctions = [(Player
                      , GetMoveFunction
                      , GetMoveFunctionDebug)]
 
-
-
-
 possibleFunctions :: [(GetMoveFunction, String)]
 possibleFunctions =
     [ (R.recom ,"Beatable AI")

@@ -1,11 +1,5 @@
 name:                Has5
 version:             0.1.0.0
--- synopsis:
--- description:
-homepage:            https://github.com/githubuser/Has5#readme
-license:             BSD3
-license-file:        LICENSE
-author:              Author name here
 build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10

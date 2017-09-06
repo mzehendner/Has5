@@ -39,6 +39,10 @@ data Direction = Horizontal
 -- Checks whether the index is in bounds
 inBounds :: Index -> Board -> Maybe Index
 inBounds i b = if inRange (bounds b) i then Just i else Nothing
+
+-- Check whether the tile at the index is empty
+maybeEmpty :: Index -> Board -> Maybe Index
+maybeEmpty i b = if isEmpty b i then Just i else Nothing
                
 -- Gives an empty board
 emptyBoard :: Board
@@ -53,7 +57,11 @@ filledBoard p = setBoard is emptyBoard
 
 -- Checks whether the Tile at the specified index is empty
 isEmpty :: Board -> Index -> Bool
-isEmpty b i = Empty==(b!i) 
+isEmpty b i = Empty==(b!i)
+
+-- Gives all indexes where the board is empty
+allEmptyIs :: Board -> [Index]
+allEmptyIs b = filter ((==Empty).(b!)) (range $ bounds b)
           
 -- Trys to set the tiles at the specified indices
 setBoard :: [(Index, Tile)] -> Board -> Board
@@ -85,7 +93,7 @@ simpleShow = (++"\n").reverse.fst.foldr (\x (out,n)
       showT Empty = " "
       showT (Set p) = show p
       
--- Functions to move to an adjacent index on the board    
+-- Functions to get an adjacent index on the board
 changeIndex :: (Int->Int,Int->Int) -> Index -> Index
 changeIndex (f,g) (a,b) = (f a, g b)
 
@@ -93,3 +101,11 @@ up = changeIndex ((+(-1)),id)
 down = changeIndex ((+1),id)
 left = changeIndex (id,(+(-1)))
 right = changeIndex (id,(+1))
+
+-- Gives the pair of function to get adjacent indices in one direction
+dirToFs :: Direction -> (Index->Index, Index->Index)
+dirToFs d | d == Horizontal = (left, right)
+          | d == Vertical = (up, down)
+          | d == Diagonall = (up.right,down.left)
+          | d == Diagonalr = (up.left,down.right)
+          | otherwise = (id,id)

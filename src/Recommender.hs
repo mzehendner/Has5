@@ -3,6 +3,7 @@ module Recommender where
 import Data.Array
 import Data.List (sortBy, find)
 import Data.Maybe (fromMaybe)
+import System.Random (randomRIO)
 
 import Material (Player, Board, Direction(..), Tile(..), Index)
 import qualified Material as M
@@ -10,6 +11,7 @@ import qualified Material as M
 type LastSet = Index
 type PlayerId = Int
 
+{-
 indexToWin :: Board -> PlayerId -> Maybe Index
 indexToWin b s = case x of [] -> Nothing
                            (_:_) -> Just (head x)
@@ -33,24 +35,22 @@ countSameDirect :: [Tile] -> Tile -> Int
 countSameDirect []      _t = 0
 countSameDirect (tx:ts) t | tx == t = 1 + countSameDirect ts t
                           | otherwise = 0
- 
+-}
 getLineOfTiles ::  Index -> Board -> (Index -> Index) -> [Tile]
 getLineOfTiles i b f| Just ix <- M.inBounds (f i) b = (b!ix) : getLineOfTiles ix b f
                     | otherwise = []
 
 getNinD :: Int -> Board -> Direction -> Index -> ([Tile],[Tile])
 getNinD n b d i = (tk f, tk g)
-    where (f,g) = dirToFs d
+    where (f,g) = M.dirToFs d
           tk = take n.getLineOfTiles i b
-           
-dirToFs :: Direction -> (Index->Index, Index->Index)
-dirToFs d | d == Horizontal = (M.left, M.right)
-          | d == Vertical = (M.up, M.down)
-          | d == Diagonall = (M.up.M.right,M.down.M.left)
-          | d == Diagonalr = (M.up.M.left,M.down.M.right)
-          | otherwise = (id,id)
 
--- The function used to determine the AIs move
+randI :: [(Index, Player)] -> [Player] -> Board -> IO Index
+randI hs ps b = randomRIO (0, length es - 1) >>= (\n -> return $ es !! n)
+    where
+      es = M.allEmptyIs b
+
+-- The function used to determine a good move. But still very much beatable.
 -- Just binding
 recom :: [(Index, Player)] -> [Player] -> Board -> IO Index
 recom mli ps b = (\mli' -> findBest mli' ps b) <$> return mli
@@ -65,11 +65,12 @@ Check how attractive a point is for me and for the opponent. Choose the most att
     
 --Here is where the sweet stuff should probably happen
 findBest :: [(Index, Player)] -> [Player] -> Board -> Index 
-findBest mli ps b = fromMaybe (fst.head $ sortBy (\(_,(n1,_)) (_,(n2,_)) -> compare n1 n2) combinedValues) (findAnyTrue combinedValues)
+findBest mli ps b = fromMaybe
+      (fst.head $ sortBy (\(_,(n1,_)) (_,(n2,_)) -> compare n1 n2) combinedValues)
+      (findAnyTrue combinedValues)
     where
-      allEmptyIs = filter ((==Empty).(b!)) (range $ bounds b)
-      combinedValues = f1 $ allValues allEmptyIs b (map M.ident ps)
-      
+      allE = M.allEmptyIs b
+      combinedValues = f1 $ allValues allE b (map M.ident ps)
 
 findAnyTrue :: [(Index,(a,Bool))] -> Maybe Index
 findAnyTrue xs | Just (i, _) <- find (snd.snd) xs = Just i

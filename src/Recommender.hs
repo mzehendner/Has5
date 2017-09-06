@@ -36,6 +36,7 @@ countSameDirect []      _t = 0
 countSameDirect (tx:ts) t | tx == t = 1 + countSameDirect ts t
                           | otherwise = 0
 -}
+
 getLineOfTiles ::  Index -> Board -> (Index -> Index) -> [Tile]
 getLineOfTiles i b f| Just ix <- M.inBounds (f i) b = (b!ix) : getLineOfTiles ix b f
                     | otherwise = []

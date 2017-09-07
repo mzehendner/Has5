@@ -49,15 +49,26 @@ emptyBoard :: Board
 emptyBoard = array ((0,0),(h',w')) [((i,j),Empty)|j<-[0..h'],i<-[0..w']]
     where w' = width-1
           h' = height-1
+
+emptyBoardL :: Board
+emptyBoardL = array ((0,0),(h',w')) [((i,j),Empty)|j<-[0..h'],i<-[0..w']]
+    where w' = width^2 * 10 - 1
+          h' = height^2 * 10 - 1
           
 filledBoard :: Player -> Board
 filledBoard p = setBoard is emptyBoard 
     where t = Set $ ident p
           is = [(i,t)|i<-indices emptyBoard]
 
--- Checks whether the Tile at the specified index is empty
+-- Checks whether the tile at the specified index is empty
 isEmpty :: Board -> Index -> Bool
 isEmpty b i = Empty==(b!i)
+
+-- Checks whether there is any tile that is empty
+anyEmpty :: Board -> Bool
+anyEmpty b = any (isEmpty b) ixs
+    where
+      ixs = range $ bounds b
 
 -- Gives all indexes where the board is empty
 allEmptyIs :: Board -> [Index]
@@ -73,7 +84,11 @@ setTile i p = setBoard ls
 
 -- Is the tile set by this player?
 tileSetBy :: Tile -> Player -> Bool
-tileSetBy t p = ident p == playerId t    
+tileSetBy t p = ident p == playerId t
+
+-- Gives the player
+setBy :: Board -> Index -> Player
+setBy b i = Player $ playerId (b ! i)
     
 -- Checks if the tile at the index is set by the
 -- same player                                 

@@ -4,6 +4,7 @@ import Data.Array
 import Data.List (sortBy, find)
 import Data.Maybe (fromMaybe)
 import System.Random (randomRIO)
+import Control.Concurrent.STM
 
 import Material (Player, Board, Direction(..), Tile(..), Index)
 import qualified Material as M
@@ -76,13 +77,15 @@ findBest mli ps b = fromMaybe
 findAnyTrue :: [(Index,(a,Bool))] -> Maybe Index
 findAnyTrue xs | Just (i, _) <- find (snd.snd) xs = Just i
                | otherwise = Nothing
-      
+
+-- Returns a list of all values for all players.
 allValues :: Integral a => [Index] -> Board -> [PlayerId] -> [[(Index,(a,Bool))]]
 allValues is b ps = allValuesFor ixs <$> ps
     where
       ixs :: [(Index,[([Tile],[Tile])])]
       ixs = zip is $ map (forDirections b) is
-      
+
+-- Returns a list of all values for one player
 allValuesFor :: Integral a 
   => [(Index, [([Tile],[Tile])])] -> PlayerId -> [(Index,(a,Bool))]
 allValuesFor inp p = s <$> inp

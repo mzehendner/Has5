@@ -4,7 +4,7 @@ import Data.Array
 import Data.List (sortBy, find)
 import Data.Maybe (fromMaybe)
 import System.Random (randomRIO)
-import Control.Concurrent.STM
+import Control.Parallel.Strategies
 
 import Material (Player, Board, Direction(..), Tile(..), Index)
 import qualified Material as M
@@ -79,16 +79,22 @@ findAnyTrue xs | Just (i, _) <- find (snd.snd) xs = Just i
                | otherwise = Nothing
 
 -- Returns a list of all values for all players.
-allValues :: Integral a => [Index] -> Board -> [PlayerId] -> [[(Index,(a,Bool))]]
+allValues :: {-Integral a =>-} [Index] -> Board -> [PlayerId] -> [[(Index,(Int,Bool))]]
 allValues is b ps = allValuesFor ixs <$> ps
     where
       ixs :: [(Index,[([Tile],[Tile])])]
       ixs = zip is $ map (forDirections b) is
 
 -- Returns a list of all values for one player
-allValuesFor :: Integral a 
-  => [(Index, [([Tile],[Tile])])] -> PlayerId -> [(Index,(a,Bool))]
-allValuesFor inp p = s <$> inp
+allValuesFor :: {-Integral a
+  => -}[(Index, [([Tile],[Tile])])] -> PlayerId -> [(Index,(Int,Bool))]
+allValuesFor inp p = map s inp `using` parList rdeepseq
+    -- without: 5.320s
+    -- with (map s inp) `using` parList: 4.559s
+    -- a lot of sparks overflow if the list is to long:
+    -- SPARKS: 320000 (11217 converted, 308612 overflowed, 0 dud, 0 GC'd, 171 fizzled)
+    -- on smaller lists:
+    -- SPARKS: 800 (629 converted, 0 overflowed, 0 dud, 31 GC'd, 140 fizzled)
     where
       s :: Integral a => (Index, [([Tile],[Tile])]) -> (Index,(a,Bool))
       s (ix, ts) = (ix, valueTile ts p)

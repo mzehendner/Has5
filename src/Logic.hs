@@ -134,9 +134,7 @@ getMoveP h ps b = getIndex b >>=
                                       
 getIndex :: Board -> IO Index
 getIndex b = do
-    putStr "Y: "
     y <- getLine
-    putStr "x: "
     x <- getLine
     return (read y :: Int, read x :: Int)
     
@@ -160,12 +158,14 @@ check5' b d =
         M.Vertical   -> (M.down, startu)
         M.Diagonall  -> (M.down.M.left,startu++tail startr)
         M.Diagonalr  -> (M.down.M.right,startu++tail startl)
-    startl = [(i,0)|i<-[0..(M.height-1)]]
-    startr = [(i,M.width-1)|i<-[0..(M.height-1)]]
-    startu = [(0,i)|i<-[0..(M.width-1)]]
+    startl = [(i,0)|i<-[0..(snd (snd (bounds b)) - 1)]]
+    startr = [(i,fst (snd (bounds b)) -1)|i<-[0..(snd (snd (bounds b))-1)]]
+    startu = [(0,i)|i<-[0..(snd (snd (bounds b))-1)]]
 
     check5'' :: [Maybe Index]
-    check5'' = map (check5inLine b f) is -- `using` parList rdeepseq -- its really fast without that
+    check5'' = map (check5inLine b f) is -- `using` parList rdeepseq -- takes half the time it would without it.
+    -- but only measurable on very large boards 400*400 takes ~ 0,026 disabled and ~ 0,013 enabled
+    -- if the board was bigger it would be effective
 
 -- Checks one line for 5 in a row.
 check5inLine :: Board -> (Index -> Index) -> Index -> Maybe Index

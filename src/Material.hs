@@ -52,8 +52,8 @@ emptyBoard = array ((0,0),(h',w')) [((i,j),Empty)|j<-[0..h'],i<-[0..w']]
 
 emptyBoardL :: Board
 emptyBoardL = array ((0,0),(h',w')) [((i,j),Empty)|j<-[0..h'],i<-[0..w']]
-    where w' = width^2 * 10 - 1
-          h' = height^2 * 10 - 1
+    where w' = width^2 - 1
+          h' = height^2 - 1
           
 filledBoard :: Player -> Board
 filledBoard p = setBoard is emptyBoard 

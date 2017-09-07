@@ -7,11 +7,12 @@ import Control.Concurrent.STM.TVar
 
 import qualified Logic as L
 import qualified Material as M
+import qualified Recommender as R
+
 
 main = do
   game <- newTVarIO L.gameDefault
   players <- newTVarIO L.playersDefault
-  --forkIO startLoop
   forkIO $ startLogicLoop game players
   threadDelay 1000000000
   --exitSuccess
@@ -24,4 +25,16 @@ startLogicLoop g p = void $ L.logic (return p) (return g)
 {- -- Moved to startLogicLoop
 startLoop :: IO ()
 startLoop = void (L.loop $ return (M.emptyBoard, L.playersStandard))
+-}
+
+{-
+  Function for testing parallelism of R.recom and L.check5
+-}
+{-
+main = do
+  let m = L.check5 M.emptyBoardL
+  r <- R.recom [] [M.Player 1, M.Player 2] M.emptyBoardL
+  --print m
+  print r
+  return ()
 -}

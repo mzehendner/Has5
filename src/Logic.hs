@@ -27,26 +27,27 @@ data Game = Game {
     deriving (Eq)
 
 -- Make Player Order a seperate type and try to synchronize it with something else than STM vielleicht eine MVar?
-data Players = Players {playerOrder :: [Player], pfindex :: [(Player,(Int, Int))]}
+data Players = Players {playerOrder :: [Player], pfindex :: [(Player,Int)]}
+  deriving (Eq,Show)
 
 gameDefault :: Game
 gameDefault =
-  Game {gameSt = Running
+  Game {gameSt = New
       , history = []
       , board = M.emptyBoard}
 
 playersDefault :: Players
 playersDefault =
   Players {playerOrder = cycle [p1, p2]
-         , pfindex = [(p1, (2, undefined)),(p2, (0, undefined))]}
+         , pfindex = [(p1, 0),(p2, 0)]}
   where p1 = Player 1
         p2 = Player 2
 
-possibleFunctions :: [(GetMoveFunction, String)]
+possibleFunctions :: [(String, GetMoveFunction)]
 possibleFunctions =
-    [ (getMoveH ,"Human") -- Change to getMoveP if supposed to start without GUI, getMoveP if without
-    , (recom ,"Beatable AI")
-    , (randI ,"Random AI")
+    [ ("Human",getMoveH) -- Change to getMoveH if supposed to start with GUI otherwise getMoveP
+    , ("Beatable AI",recom)
+    , ("Random AI", randI)
     ]
 
 logic :: TVar Players -> TVar Game -> TVar Index -> IO ()
@@ -72,8 +73,8 @@ logic players game index = forever $ do
     putStrLn "Looped"
   where
     f (p:_) pf = case lookup p pf
-                   of Just x -> fst $ possibleFunctions !! fst x
-                      Nothing -> fst $ head possibleFunctions
+                   of Just x -> snd $ possibleFunctions !! x
+                      Nothing -> snd $ head possibleFunctions
 
     -- Sets the index only if the state of the tvars are the same as in the beginning of the logic function
     setTVars :: GameState -> Players -> Game -> Index -> TVar Game -> TVar Players -> STM()
@@ -88,6 +89,56 @@ logic players game index = forever $ do
           let b' = M.setTile i (ident p0) b
           writeTVar game (Game gst' h b')
 
+logic2 :: TVar Players -> TVar Game -> TVar Index -> IO ()
+logic2 players game index = forever $ do
+    -- Check whether the game has been won or reset
+    atomically $ setGameStateInTVar game
+    g@(Game gst h b) <- readTVarIO game
+    --putStrLn $ M.simpleShow b
+    --putStrLn $ "GameState: " ++ show gst
+    case gst of
+      New -> putStrLn "New" >> atomically (setGameStateInTVar game)
+      Won p -> threadDelay 1000000
+      Draw -> threadDelay 1000000
+      Running -> do
+        --putStrLn "Running"
+        p@(Players pc@(p0:r) pfi) <- readTVarIO players
+        --print pfi
+        let pfunction = findFunction pc pfi
+        i <- pfunction index h pc b
+        let b' = M.setTile i (ident p0) b
+        case M.inBounds i b >>= flip M.maybeEmpty b of
+          Nothing -> return ()
+          Just i -> atomically $ do
+            b <- hasChanged g p game players
+            if b
+            then return()
+            else writeTVar game (Game gst ((i,p0):h) b') >>
+                            writeTVar players (Players r pfi)
+    threadDelay 10000
+  where
+    findFunction (p:_) pf = case lookup p pf of
+                  Just x -> snd $ possibleFunctions !! x
+                  Nothing -> snd $ head possibleFunctions
+    hasChanged :: Game -> Players -> TVar Game -> TVar Players -> STM Bool
+    hasChanged g p game player = do
+        g' <- readTVar game
+        p' <- readTVar player
+        return False -- $ g == g' && p' == p
+
+
+
+setGameStateInTVar :: TVar Game -> STM()
+setGameStateInTVar game = do
+    (Game gst h b) <- readTVar game
+    if gst /= New
+    then do
+      let new = setGameSt (check5 b) b
+      writeTVar game (Game new h b)
+    else
+      writeTVar game (Game Running h b)
+
+
 -- Checks whether the game is over or still ongoing
 setGameSt :: [(Index, Direction)] -> Board -> GameState
 setGameSt []    b | M.anyEmpty b =  Running
@@ -97,14 +148,13 @@ setGameSt (x:_) b = Won {winner = (M.setBy b (fst x),x)}
 -- Gets the next button press by the user as input
 getMoveH :: TVar Index -> History -> [Player] -> Board -> IO Index
 getMoveH varI h ps b = do
+      --threadDelay 1000000
       index <- readTVarIO varI
       if index == (-1,-1)
-      then do
-        atomically $ setM index
-        randI varI h ps b
+      then atomically $ setM >> return index
       else return index
     where
-      setM i = writeTVar varI (-1,-1)
+      setM = writeTVar varI (-1,-1)
 
 -- Gets a move by input trough the command line.
 getMoveP :: TVar Index -> History -> [Player] -> Board -> IO Index

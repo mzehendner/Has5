@@ -53,10 +53,12 @@ randI hs ps b = randomRIO (0, length es - 1) >>= (\n -> return $ es !! n)
       es = M.allEmptyIs b
 
 -- The function used to determine a good move. But still very much beatable.
--- Just binding
+-- Just binding and choosing one of the best
 recom :: [(Index, Player)] -> [Player] -> Board -> IO Index
-recom mli ps b = (\mli' -> findBest mli' ps b) <$> return mli
-
+recom mli ps b = do --(\mli' -> findBest mli' ps b) <$> return mli
+  xs <- (\mli' -> findBest mli' ps b) <$> return mli
+  n <- randomRIO (0, length xs - 1)
+  return $ fst (xs !! n)
 
 {-
 ------------------------------------
@@ -66,13 +68,12 @@ Check how attractive a point is for me and for the opponent. Choose the most att
 -}
 
 
-findBest :: [(Index, Player)] -> [Player] -> Board -> Index
-findBest mli ps b = fromMaybe
-      (fst.head $ sortBy (\(_,(n1,_)) (_,(n2,_)) -> compare n1 n2) combinedValues)
-      (findAnyTrue combinedValues)
+findBest :: [(Index, Player)] -> [Player] -> Board -> [(Index,(Integer,Bool))]
+findBest mli ps b = allBest $ sortBy (\(_,(n1,_)) (_,(n2,_)) -> compare n1 n2) combinedValues
     where
       allE = M.allEmptyIs b
       combinedValues = f1 $ allValues allE b (map M.ident ps)
+      allBest (x:xs)= x : takeWhile ((==snd x).snd) xs
 
 findAnyTrue :: [(Index,(a,Bool))] -> Maybe Index
 findAnyTrue xs | Just (i, _) <- find (snd.snd) xs = Just i

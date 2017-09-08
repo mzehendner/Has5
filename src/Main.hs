@@ -29,7 +29,7 @@ main = do
 -}
 
 startLogicLoop :: TVar L.Game -> TVar L.Players -> TVar M.Index -> IO()
-startLogicLoop g p i = void $ L.logic p g i
+startLogicLoop g p i = void $ L.logic2 p g i
 
 {-
 main = do
@@ -43,19 +43,14 @@ main = do
 {-
   Game with GUI
 -}
-
 main = do
   initGUI
   game <- newTVarIO L.gameDefault
   players <- newTVarIO L.playersDefault
   index <- newTVarIO (-1,-1)
-  (window, (f, buttons)) <- G.setWindow index
+  (window, (f, buttons), rs) <- G.setWindow game players index
   -- updater for Buttons
   -- TODO Maybe merge these two calls
   forkIO $ startLogicLoop game players index
-  forkIO $ G.update game players buttons
+  forkIO $ G.update game players buttons rs
   mainGUI
-
-
-
-

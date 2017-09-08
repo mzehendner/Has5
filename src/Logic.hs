@@ -12,13 +12,9 @@ import Control.Monad
 
 
 type History = [(Index, Player)]
-type GetMoveFunction = (History -> [Player] ->  Board -> IO Index)
+type GetMoveFunction = (TVar Index -> History -> [Player] ->  Board -> IO Index)
 
--- TODO add functionality for a debug function
-type GetMoveFunctionDebug = (History -> Board -> [Player] -> IO (Index,[(Index,Int)]))
-type PlayerFunctions = [(Player
-                     , (GetMoveFunction
-                     , GetMoveFunctionDebug))]
+type PlayerFunctions = [(Player, GetMoveFunction)]
 
 data GameState = New | Running | Draw | Won {winner :: (Player, (Index,Direction))}
     deriving (Eq, Show)
@@ -42,53 +38,32 @@ gameDefault =
 playersDefault :: Players
 playersDefault =
   Players {playerOrder = cycle [p1, p2]
-         , pfindex = [(p1, (0, undefined)),(p2, (2, undefined))]}
+         , pfindex = [(p1, (2, undefined)),(p2, (0, undefined))]}
   where p1 = Player 1
         p2 = Player 2
 
 possibleFunctions :: [(GetMoveFunction, String)]
 possibleFunctions =
-    [ (getMoveP ,"Human")
-    , (R.recom ,"Beatable AI")
-    , (R.randI ,"Random AI")
+    [ (getMoveH ,"Human") -- Change to getMoveP if supposed to start without GUI, getMoveP if without
+    , (recom ,"Beatable AI")
+    , (randI ,"Random AI")
     ]
 
-
-
-{- -- Old loop without concurrency
-playerFunctionsStandard = [(Player 1, (R.recom, undefined)),(Player 2, (R.recom, undefined))]
-playersStandard = cycle [Player 1, Player 2]
-
-loop :: IO (Board,[Player]) -> IO Board
-loop inp = do
-    (b, ps@(p:r)) <- inp
-    print $ check5 b
-    putStrLn $ M.simpleShow b
-    --threadDelay 1000000
-    let f = case lookup p playerFunctionsStandard
-                of Just x -> fst x
-                   Nothing -> getMoveP
-    i <-  f [] ps b
-    loop $ return (M.setTile i (ident p) b, r)
--}
-
-logic :: IO (TVar Players) ->IO (TVar Game) -> IO ()
-logic players game = forever $ do
-    players' <- players
-    game' <- game
-    p@(Players ps pf) <- readTVarIO players'
-    g@(Game gst' h b) <- readTVarIO game'
+logic :: TVar Players -> TVar Game -> TVar Index -> IO ()
+logic players game index = forever $ do
+    p@(Players ps pf) <- readTVarIO players
+    g@(Game gst' h b) <- readTVarIO game
     let gst = setGameSt (check5 b)  b
     putStrLn $ M.simpleShow b
     putStrLn $ "GameState: " ++ show gst'
     if gst' == Running then -- if it'
      do
-       i <- (f ps pf) h ps b -- evaluating the gamestate after asking for the index
+       i <- (f ps pf) index h ps b -- evaluating the gamestate after asking for the index
                              -- leads to a bug where the player is asked for input alltough
                              -- the state shouldnt be running anymore
                              -- could potentially lead to bugs for a draw
        print i
-       atomically $ setTVars gst p g i game' players'
+       atomically $ setTVars gst p g i game players
        putStrLn "Was set"
        return ()
     else
@@ -119,20 +94,37 @@ setGameSt []    b | M.anyEmpty b =  Running
                   | otherwise = Draw
 setGameSt (x:_) b = Won {winner = (M.setBy b (fst x),x)}
 
+-- Gets the next button press by the user as input
+getMoveH :: TVar Index -> History -> [Player] -> Board -> IO Index
+getMoveH varI h ps b = do
+      index <- readTVarIO varI
+      if index == (-1,-1)
+      then do
+        atomically $ setM index
+        randI varI h ps b
+      else return index
+    where
+      setM i = writeTVar varI (-1,-1)
+
 -- Gets a move by input trough the command line.
-getMoveP :: History -> [Player] -> Board -> IO Index
-getMoveP h ps b = getIndex b >>=
+getMoveP :: TVar Index -> History -> [Player] -> Board -> IO Index
+getMoveP t h ps b = getIndex b >>=
         (\i -> case M.inBounds i b >>= flip M.maybeEmpty b
                of Just ix -> return ix
-                  Nothing -> getMoveP h ps b)
+                  Nothing -> getMoveP t h ps b)
+    where
+      getIndex :: Board -> IO Index
+      getIndex b = do
+          y <- getLine
+          x <- getLine
+          return (read y :: Int, read x :: Int)
 
-getIndex :: Board -> IO Index
-getIndex b = do
-    y <- getLine
-    x <- getLine
-    return (read y :: Int, read x :: Int)
+--aliases for Recommender functions that also throw away the TVar
+recom :: TVar Index -> History -> [Player] -> Board -> IO Index
+recom t = R.recom
 
-
+randI :: TVar Index -> History -> [Player] -> Board -> IO Index
+randI t = R.recom
 
 -- Checks whether a Player has connected 5.
 -- Give a list of the starting indices and the direction.

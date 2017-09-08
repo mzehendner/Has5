@@ -9,31 +9,28 @@ import Graphics.UI.Gtk
 import qualified Logic as L
 import qualified Material as M
 import qualified Recommender as R
+import qualified GUI as G
 
 
 {-
   Game without GUI
+  -- Needs a change in the possibleFunctions
 -}
 {-
 main = do
   game <- newTVarIO L.gameDefault
   players <- newTVarIO L.playersDefault
-  forkIO $ startLogicLoop game players
+  index <- newTVarIO (-1,-1)
+  forkIO $ startLogicLoop game players index
   threadDelay 1000000000
   --exitSuccess
+
+
 -}
 
-startLogicLoop :: TVar L.Game -> TVar L.Players -> IO()
-startLogicLoop g p = void $ L.logic (return p) (return g)
+startLogicLoop :: TVar L.Game -> TVar L.Players -> TVar M.Index -> IO()
+startLogicLoop g p i = void $ L.logic p g i
 
-{- -- Moved to startLogicLoop
-startLoop :: IO ()
-startLoop = void (L.loop $ return (M.emptyBoard, L.playersStandard))
--}
-
-{-
-  Function for testing parallelism of R.recom and L.check5
--}
 {-
 main = do
   let m = L.check5 M.emptyBoardL
@@ -49,30 +46,15 @@ main = do
 
 main = do
   initGUI
-  window <- windowNew
   game <- newTVarIO L.gameDefault
   players <- newTVarIO L.playersDefault
-
-
-
-  return ()
-
-createBoard :: TVar game -> TVar players -> IO HBox
-createBoard
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  index <- newTVarIO (-1,-1)
+  (window, (f, buttons)) <- G.setWindow index
+  -- updater for Buttons
+  -- TODO Maybe merge these two calls
+  forkIO $ startLogicLoop game players index
+  forkIO $ G.update game players buttons
+  mainGUI
 
 
 

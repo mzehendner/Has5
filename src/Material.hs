@@ -8,8 +8,6 @@ import Data.Array
 newtype Player = Player {ident :: Int}
   deriving (Show, Eq)
 
-allDirections = [Horizontal .. Diagonalr]
-
 
 {-
   Board
@@ -35,6 +33,11 @@ data Direction = Horizontal
                | Diagonall
                | Diagonalr
                deriving (Show, Eq, Enum)
+
+allDirections = [Horizontal .. Diagonalr]
+
+allIs :: Board -> [Index]
+allIs b = range $ bounds b
 
 -- Checks whether the index is in bounds
 inBounds :: Index -> Board -> Maybe Index
@@ -72,7 +75,7 @@ anyEmpty b = any (isEmpty b) ixs
 
 -- Gives all indexes where the board is empty
 allEmptyIs :: Board -> [Index]
-allEmptyIs b = filter ((==Empty).(b!)) (range $ bounds b)
+allEmptyIs b = filter ((==Empty).(b!)) (allIs b)
           
 -- Trys to set the tiles at the specified indices
 setBoard :: [(Index, Tile)] -> Board -> Board

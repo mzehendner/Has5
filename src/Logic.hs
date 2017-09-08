@@ -174,7 +174,7 @@ recom :: TVar Index -> History -> [Player] -> Board -> IO Index
 recom t = R.recom
 
 randI :: TVar Index -> History -> [Player] -> Board -> IO Index
-randI t = R.recom
+randI t = R.randI
 
 -- Checks whether a Player has connected 5.
 -- Give a list of the starting indices and the direction.

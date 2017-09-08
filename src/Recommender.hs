@@ -18,7 +18,7 @@ indexToWin b s = case x of [] -> Nothing
                            (_:_) -> Just (head x)
     where x = testWin b s
 
---Checks if the game can be won in this turn    
+--Checks if the game can be won in this turn
 testWin :: Board -> PlayerId -> [Index]
 testWin b s = map snd z
     where
@@ -26,7 +26,7 @@ testWin b s = map snd z
         y = map (testWin' s) x
         z = filter ((==True).fst) (zip y ix)
         ix = filter ((==Empty).(b!)) (range (bounds b))
-                         
+
 testWin' :: PlayerId -> ([Tile],[Tile]) -> Bool
 testWin' s (ba,bb) | na + nb >= 4 = True
                    | otherwise = False
@@ -57,16 +57,16 @@ randI hs ps b = randomRIO (0, length es - 1) >>= (\n -> return $ es !! n)
 recom :: [(Index, Player)] -> [Player] -> Board -> IO Index
 recom mli ps b = (\mli' -> findBest mli' ps b) <$> return mli
 
-          
+
 {-
 ------------------------------------
 ------------------------------------
 Check how attractive a point is for me and for the opponent. Choose the most attractive one.
 ------------------------------------
 -}
-    
---Here is where the sweet stuff should probably happen
-findBest :: [(Index, Player)] -> [Player] -> Board -> Index 
+
+
+findBest :: [(Index, Player)] -> [Player] -> Board -> Index
 findBest mli ps b = fromMaybe
       (fst.head $ sortBy (\(_,(n1,_)) (_,(n2,_)) -> compare n1 n2) combinedValues)
       (findAnyTrue combinedValues)
@@ -79,16 +79,15 @@ findAnyTrue xs | Just (i, _) <- find (snd.snd) xs = Just i
                | otherwise = Nothing
 
 -- Returns a list of all values for all players.
-allValues :: {-Integral a =>-} [Index] -> Board -> [PlayerId] -> [[(Index,(Int,Bool))]]
+allValues :: [Index] -> Board -> [PlayerId] -> [[(Index,(Integer,Bool))]]
 allValues is b ps = allValuesFor ixs <$> ps
     where
       ixs :: [(Index,[([Tile],[Tile])])]
       ixs = zip is $ map (forDirections b) is
 
 -- Returns a list of all values for one player
-allValuesFor :: {-Integral a
-  => -}[(Index, [([Tile],[Tile])])] -> PlayerId -> [(Index,(Int,Bool))]
-allValuesFor inp p = map s inp `using` parList rdeepseq
+allValuesFor :: [(Index, [([Tile],[Tile])])] -> PlayerId -> [(Index,(Integer,Bool))]
+allValuesFor inp p = s <$> inp --`using` parList rdeepseq
     -- without: 5.320s
     -- with (map s inp) `using` parList: 4.559s
     -- a lot of sparks overflow if the list is to long:
@@ -98,7 +97,7 @@ allValuesFor inp p = map s inp `using` parList rdeepseq
     where
       s :: Integral a => (Index, [([Tile],[Tile])]) -> (Index,(a,Bool))
       s (ix, ts) = (ix, valueTile ts p)
-     
+
 -- Converts the tiles in both directions with the current index set by the specified player
 conv :: (Tile -> Bool) -> ([Tile],[Tile]) -> PlayerId -> [Tile]
 conv f (as, bs) p = reverse (takeWhile f as) ++ Set p:takeWhile f bs
@@ -106,17 +105,17 @@ conv f (as, bs) p = reverse (takeWhile f as) ++ Set p:takeWhile f bs
 --Counts how many possible lines of 5 are in this row
 possibleWins :: Integral a => [Tile] -> PlayerId -> a
 possibleWins = possibleWins' 0
-    where 
+    where
       possibleWins' :: Integral a => a -> [Tile] -> PlayerId -> a
       possibleWins' _ []     _ = 0
-      possibleWins' n (x:xs) p | x `elem` [Set p, Empty] = possibleWins' (n+1) xs p 
+      possibleWins' n (x:xs) p | x `elem` [Set p, Empty] = possibleWins' (n+1) xs p
                                              + (if n>=4 then 1 else 0)
                                | otherwise = possibleWins' 0 xs p
-                                 
+
 --Counts the minimal number of turns to victory in this row
 minimalTurns :: Integral a => [Tile] -> PlayerId -> a
 minimalTurns ts p = minimum $ minimalTurns' ts
-    where 
+    where
       minimalTurns' :: Integral a => [Tile] -> [a]
       minimalTurns' [] = [5]
       minimalTurns' ts = counts (take 5 ts):minimalTurns' (drop 1 ts)
@@ -125,24 +124,24 @@ minimalTurns ts p = minimum $ minimalTurns' ts
       counts' []     n = n
       counts' (t:ts) n | t `notElem` [Set p, Empty] = 5
                        | otherwise = counts' ts (if t == Empty then n+1 else n)
-                       
+
 --Gives the biggest connected line that can be reached
 longestReachable :: Integral a => ([Tile],[Tile]) -> PlayerId -> a
 longestReachable ts@(as, bs) p = maximum $ longestR $ conv f ts p
-    where 
+    where
       f = (`elem` [Set p, Empty])
       longestR :: Integral a => [Tile] -> [a]
       longestR = foldr (\t out -> if t == Set p then (+1) (head out) : drop 1 out
                                                 else 0:out
                        ) [0]
-                       
+
 {-
 ( x = minimalTurns is < 5 and low is good
 , y = possibleWins < 6 and high is good
 , z = longestReachable < 4 and high is good)
 -}
--- Gives a List of values 
--- Order of functions is [minimalTurns, possibleWins, longestReachable] 
+-- Gives a List of values
+-- Order of functions is [minimalTurns, possibleWins, longestReachable]
 values :: Integral a => PlayerId -> ([Tile],[Tile]) -> [a]
 values p ts = [minimalTurns ts2, possibleWins ts2, longestReachable ts]<*>[p]
     where ts2 = conv (const True) ts p
@@ -162,15 +161,15 @@ sortPosByVal i = sortBy f
 -- Computes the value of a tile for the specified Player
 valueTile :: Integral a => [([Tile],[Tile])] -> PlayerId -> (a, Bool)
 valueTile ts p = foldVals h1 g1 $ fmap (values p) ts
--- merge with x * (6-y) * (5-z)
+-- merge functions
 h1 :: Integral a => [a] -> a
 h1 (x:y:z:_) = x^3 * (6-y) * ((5-z)^3)
 g1 :: Integral a => a -> a -> a
 g1 = (*)
 f1 :: Integral a => [[(Index, (a, Bool))]] -> [(Index, (a, Bool))]
 f1 (a:b:_) = zipWith (\(i1,(n1,b1)) (_,(n2,b2)) -> (i1, (n1 * n2,b1||b2))) a b
-           
---Function that gives an integer value determining if it's a valuable 
+
+--Function that gives an integer value determining if it's a valuable
 --position or not and wether 5 can be connected at this index.
 foldVals :: Integral a => ([a]->a) -> (a -> a -> a) -> [[a]] -> (a, Bool)
 foldVals h g xs= (foldr (g.fst) 1 ns, b)

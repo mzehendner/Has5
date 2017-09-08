@@ -1,7 +1,7 @@
 name:                Has5
 version:             0.1.0.0
 build-type:          Simple
-extra-source-files:  README.md
+--extra-source-files:  README.md
 cabal-version:       >=1.10
 
 executable has5
@@ -10,11 +10,12 @@ executable has5
   Other-Modules:       Logic
                      , Recommender
                      , Material
-  --ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  ghc-options:         -threaded -rtsopts
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  --ghc-options:         -threaded -rtsopts
   build-depends:       base >= 4.7 && < 5
                      , array
                      , random
                      , stm
                      , parallel
+                     , gtk
   default-language:    Haskell2010

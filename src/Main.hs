@@ -4,23 +4,27 @@ import Control.Concurrent
 import Control.Monad (void, forever)
 import System.Exit
 import Control.Concurrent.STM.TVar
+import Graphics.UI.Gtk
 
 import qualified Logic as L
 import qualified Material as M
 import qualified Recommender as R
 
 
+{-
+  Game without GUI
+-}
+{-
 main = do
   game <- newTVarIO L.gameDefault
   players <- newTVarIO L.playersDefault
   forkIO $ startLogicLoop game players
   threadDelay 1000000000
   --exitSuccess
-
+-}
 
 startLogicLoop :: TVar L.Game -> TVar L.Players -> IO()
 startLogicLoop g p = void $ L.logic (return p) (return g)
-
 
 {- -- Moved to startLogicLoop
 startLoop :: IO ()
@@ -38,3 +42,38 @@ main = do
   print r
   return ()
 -}
+
+{-
+  Game with GUI
+-}
+
+main = do
+  initGUI
+  window <- windowNew
+  game <- newTVarIO L.gameDefault
+  players <- newTVarIO L.playersDefault
+
+
+
+  return ()
+
+createBoard :: TVar game -> TVar players -> IO HBox
+createBoard
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

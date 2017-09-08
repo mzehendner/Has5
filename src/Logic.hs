@@ -13,12 +13,14 @@ import Control.Monad
 
 type History = [(Index, Player)]
 type GetMoveFunction = (History -> [Player] ->  Board -> IO Index)
+
+-- TODO add functionality for a debug function
 type GetMoveFunctionDebug = (History -> Board -> [Player] -> IO (Index,[(Index,Int)]))
 type PlayerFunctions = [(Player
                      , (GetMoveFunction
                      , GetMoveFunctionDebug))]
 
-data GameState = Running | Draw | Won {winner :: (Player, (Index,Direction))}
+data GameState = New | Running | Draw | Won {winner :: (Player, (Index,Direction))}
     deriving (Eq, Show)
 
 data Game = Game {
@@ -29,7 +31,7 @@ data Game = Game {
     deriving (Eq)
 
 -- Make Player Order a seperate type and try to synchronize it with something else than STM vielleicht eine MVar?
-data Players = Players {playerOrder :: [Player], pfunctions :: PlayerFunctions}
+data Players = Players {playerOrder :: [Player], pfindex :: [(Player,(Int, Int))]}
 
 gameDefault :: Game
 gameDefault =
@@ -40,15 +42,15 @@ gameDefault =
 playersDefault :: Players
 playersDefault =
   Players {playerOrder = cycle [p1, p2]
-         , pfunctions = [(p1, (R.recom, undefined)),(p2, (getMoveP, undefined))]}
+         , pfindex = [(p1, (0, undefined)),(p2, (2, undefined))]}
   where p1 = Player 1
         p2 = Player 2
 
 possibleFunctions :: [(GetMoveFunction, String)]
 possibleFunctions =
-    [ (R.recom ,"Beatable AI")
+    [ (getMoveP ,"Human")
+    , (R.recom ,"Beatable AI")
     , (R.randI ,"Random AI")
-    , (getMoveP ,"Human")
     ]
 
 
@@ -76,29 +78,27 @@ logic players game = forever $ do
     game' <- game
     p@(Players ps pf) <- readTVarIO players'
     g@(Game gst' h b) <- readTVarIO game'
+    let gst = setGameSt (check5 b)  b
     putStrLn $ M.simpleShow b
     putStrLn $ "GameState: " ++ show gst'
-    if gst' == Running then
+    if gst' == Running then -- if it'
      do
        i <- (f ps pf) h ps b -- evaluating the gamestate after asking for the index
                              -- leads to a bug where the player is asked for input alltough
                              -- the state shouldnt be running anymore
                              -- could potentially lead to bugs for a draw
        print i
-       let gst = setGameSt (check5 b)  b
-       atomically $ setTVars gst p g i game' players' -- `orElse` x
+       atomically $ setTVars gst p g i game' players'
        putStrLn "Was set"
        return ()
     else
-     do
-       putStrLn "Nothing"
-       return ()
+      putStrLn "Nothing"
     threadDelay 1000000
     putStrLn "Looped"
   where
     f (p:_) pf = case lookup p pf
-                   of Just x -> fst x
-                      Nothing -> R.recom
+                   of Just x -> fst $ possibleFunctions !! fst x
+                      Nothing -> fst $ head possibleFunctions
 
     -- Sets the index only if the state of the tvars are the same as in the beginning of the logic function
     setTVars :: GameState -> Players -> Game -> Index -> TVar Game -> TVar Players -> STM()
@@ -112,12 +112,6 @@ logic players game = forever $ do
           writeTVar players (Players r pf)
           let b' = M.setTile i (ident p0) b
           writeTVar game (Game gst' h b')
-        --if p == p' && g == g' then
-         --do
-        --((i,p0):h) b')
-        --else
-         --do
-          --return ()
 
 -- Checks whether the game is over or still ongoing
 setGameSt :: [(Index, Direction)] -> Board -> GameState
@@ -131,15 +125,15 @@ getMoveP h ps b = getIndex b >>=
         (\i -> case M.inBounds i b >>= flip M.maybeEmpty b
                of Just ix -> return ix
                   Nothing -> getMoveP h ps b)
-                                      
+
 getIndex :: Board -> IO Index
 getIndex b = do
     y <- getLine
     x <- getLine
     return (read y :: Int, read x :: Int)
-    
-    
-    
+
+
+
 -- Checks whether a Player has connected 5.
 -- Give a list of the starting indices and the direction.
 check5 :: Board -> [(Index, Direction)]
@@ -148,7 +142,7 @@ check5 b = concat $ [check5' b]<*>M.allDirections
 -- Gives a list of the indices for one direction.
 check5' :: Board -> Direction -> [(Index, Direction)]
 check5' b d =
-    foldr (\x out-> case x of 
+    foldr (\x out-> case x of
                 Nothing -> out
                 Just y -> (y,d) : out
           ) [] check5''
@@ -176,6 +170,6 @@ check5inLine b = ch (Nothing, Empty, 0)
                                     = if M.setBySame a t b
                                         then ch (mi,t,n+1) f (f ix)
                                         else ch (Just i,b!i,1) f (f ix)
-                                | otherwise 
-                                    = Nothing      
+                                | otherwise
+                                    = Nothing
           inBounds' = flip M.inBounds b

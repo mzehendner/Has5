@@ -60,7 +60,7 @@ setWindow game players index = do
     hbox <- hBoxNew False 0
     fixed <- fixedNew
     bs <- createBoard index fixed M.emptyBoard
-    set window [windowDefaultWidth := 500, windowDefaultHeight := 400,
+    set window [windowDefaultWidth := 500, windowDefaultHeight := 440,
                 containerBorderWidth := 0, containerChild := hbox,
                 windowTitle := "Has5"]
     onDestroy window mainQuit
@@ -94,8 +94,8 @@ boardButton ::TVar Index -> Fixed -> Index -> IO Button
 boardButton  varI fixed index@(x,y)= do
     b <- buttonNew
     onClicked b (boardButtonPress b varI index) -- FIXME deprecated function onClicked
-    fixedPut fixed b (y*20,x*20)
-    widgetSetSizeRequest b 20 20
+    fixedPut fixed b (y*24,x*24)
+    widgetSetSizeRequest b 24 24
     return b
 
 -- Handles the button presses
@@ -140,7 +140,7 @@ restart b game players index = atomically $ do
 comboBoxes :: TVar L.Players -> Player -> [(String, L.GetMoveFunction)] -> IO ComboBox
 comboBoxes ps p inp= do
     cb <- comboBoxNewText
-    mapM_  ((comboBoxAppendText cb).T.pack.fst) inp
+    mapM_  (comboBoxAppendText cb .T.pack.fst) inp
     onChanged cb (cbChanged ps p (comboBoxGetActive cb)) -- FIXME deprecated Function onChanged
     comboBoxSetActive cb 0
     return cb

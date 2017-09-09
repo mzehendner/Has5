@@ -119,7 +119,7 @@ logic2 players game index = forever $ do
             then return()
             else writeTVar game (Game gst ((i,p0):h) b') >>
                             writeTVar players (Players r pfi)
-    threadDelay 10000
+    threadDelay 100000
   where
     findFunction (p:_) pf = case lookup p pf of
                   Just x -> snd $ possibleFunctions !! x

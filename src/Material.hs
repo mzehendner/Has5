@@ -84,6 +84,12 @@ setBoard = flip (//)
 -- Trys to set the tile at the index
 setTile i p = setBoard ls
     where ls = [(i, Set p)]
+    
+-- Trys to get the tile at the specified index
+getTile :: Index -> Board -> Maybe Tile
+getTile i b = case inBounds i b of
+  Just i -> Just $ b ! i
+  Nothing -> Nothing
 
 -- Is the tile set by this player?
 tileSetBy :: Tile -> Player -> Bool

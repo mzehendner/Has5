@@ -64,3 +64,4 @@ main = do
   -- updates the GUI
   forkIO $ G.update game players buttons rs
   mainGUI
+

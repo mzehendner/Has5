@@ -14,15 +14,25 @@ import qualified Logic as L
 type LeftSide = (Fixed, [(Index, Button)])
 type RightSide = (Label, ComboBox, ComboBox)
 
+-- updates the GUI
 update :: TVar L.Game -> TVar L.Players -> [(Index,Button)] -> RightSide -> IO()
 update game' players' bmap (l, _, _)= forever $ do
     game@(L.Game gst h b) <- readTVarIO game'
     players <- readTVarIO players'
-    postGUIAsync $ updateButtons b bmap
-    postGUIAsync $ updateStatusLabel l players' game'
+    --Check whole board first then history
+    buttonsU <- needUpdateWholeBoard bmap b
+    buttonsU' <- if length buttonsU == 0 
+                 then needUpdateH h bmap b
+                 else return buttonsU
+    print $ length buttonsU'
+    if null buttonsU'
+    then return ()
+    else postGUIAsync $ updateButtons b buttonsU' 
+        >> updateStatusLabel l players' game'
     threadDelay 50000
-    return ()
-
+    -- as few postGUIAsync calls as possible
+    -- otherwise the gui gets laggy    
+    
 -- Update status label
 updateStatusLabel :: Label -> TVar L.Players -> TVar L.Game -> IO()
 updateStatusLabel l players game = do
@@ -34,6 +44,47 @@ updateStatusLabel l players game = do
             L.Draw -> "Draw"
             L.New -> "Running"
   labelSetText l s
+
+-- Find indexes from the history that need to be
+-- updated by comparing the value stored in the button 
+needUpdateH :: L.History -> [(Index,Button)] -> Board -> IO [(Index,Button)]
+needUpdateH [] bmap board = return []
+needUpdateH ((i,p):hs) bmap board = case M.getTile i board of 
+    Just t -> do
+      let b' = lookup i bmap
+      case b' of 
+        Nothing -> return []
+        Just b-> do
+          blabel <- buttonGetLabel b
+          if different t blabel
+          then do
+            next <- needUpdateH hs bmap board
+            return $ (i,b) : next
+          else return []
+    Nothing -> needUpdateH hs bmap board
+  where
+    different :: Tile -> String -> Bool
+    different t blabel = lookup t tileSigns /= Just blabel
+
+-- If any empty tile on the board is not set to " " 
+-- update all buttons.
+-- Removes the slowdown after a restart
+needUpdateWholeBoard :: [(Index,Button)] -> Board -> IO [(Index,Button)]
+needUpdateWholeBoard bmap board = do
+    fs' <- sequence $ fs bmap
+    if any id fs'
+    then return bmap 
+    else return []
+  where
+    fs :: [(Index, Button)] -> [IO Bool]
+    fs bmap' = map (\i -> case lookup i bmap' of 
+                Just b -> do 
+                    blabel <- buttonGetLabel b 
+                    return $ blabel /= " "
+                Nothing -> return False) 
+             (M.allEmptyIs board)
+
+tileSigns = [(M.Empty, " "),(M.Set 1, "X"),(M.Set 2, "O")]
 
 -- Updates the labels on the buttons according to the board
 updateButtons ::Board -> [(Index,Button)] -> IO()
@@ -89,7 +140,7 @@ createBoard varI fixed b =
           []
           (M.allIs b)
 
--- Creates one button completely
+-- Creates one button for the board
 boardButton ::TVar Index -> Fixed -> Index -> IO Button
 boardButton  varI fixed index@(x,y)= do
     b <- buttonNew
@@ -130,13 +181,15 @@ createRightSide vbox game players index = do
     boxPackStart vbox hbox3 PackNatural 0
     return (labelm, comboBox1, comboBox2)
 
+-- restarts the game by resetting the TVars
 restart :: Button -> TVar L.Game -> TVar L.Players -> TVar Index -> IO()
 restart b game players index = atomically $ do
     (L.Players _ pc) <- readTVar players
     writeTVar players (L.playersDefault {L.pfindex = pc}) >>
       writeTVar game L.gameDefault >>
       writeTVar index (-1,-1)
-
+    
+-- gives a combo box that allows the user to swap the playerfunctions
 comboBoxes :: TVar L.Players -> Player -> [(String, L.GetMoveFunction)] -> IO ComboBox
 comboBoxes ps p inp= do
     cb <- comboBoxNewText
@@ -145,6 +198,7 @@ comboBoxes ps p inp= do
     comboBoxSetActive cb 0
     return cb
 
+-- Updates the index indicating the function for the player
 cbChanged :: TVar L.Players -> Player -> IO Int-> IO()
 cbChanged players p i' = do
     i <- i'

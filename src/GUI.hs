@@ -31,8 +31,8 @@ updateStatusLabel l players game = do
   let s = case gst of
             L.Running -> "Running: " ++ show p
             L.Won p1 -> "Player " ++ show (M.ident $ fst p1) ++ " won!"
-            Draw -> "Draw"
-            New -> "Running"
+            L.Draw -> "Draw"
+            L.New -> "Running"
   labelSetText l s
 
 -- Updates the labels on the buttons according to the board

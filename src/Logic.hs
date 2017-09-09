@@ -89,6 +89,10 @@ logic players game index = forever $ do
           let b' = M.setTile i (ident p0) b
           writeTVar game (Game gst' h b')
 
+-- Actual loop for the logic
+-- Maybe can be cleaned up by removing the need for IO in getMove Functions
+-- would need another Random Number Generator or the use of unsafePerformIO
+-- Would probably make the STM work better?
 logic2 :: TVar Players -> TVar Game -> TVar Index -> IO ()
 logic2 players game index = forever $ do
     -- Check whether the game has been won or reset

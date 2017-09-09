@@ -29,7 +29,7 @@ updateStatusLabel l players game = do
   (L.Players (p:_) _)<- readTVarIO players
   (L.Game gst _ _) <- readTVarIO game
   let s = case gst of
-            L.Running -> "Running: " ++ show p
+            L.Running -> "Running: Player " ++ show (M.ident p)
             L.Won p1 -> "Player " ++ show (M.ident $ fst p1) ++ " won!"
             L.Draw -> "Draw"
             L.New -> "Running"

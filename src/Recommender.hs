@@ -12,31 +12,12 @@ import qualified Material as M
 type LastSet = Index
 type PlayerId = Int
 
-{-
-indexToWin :: Board -> PlayerId -> Maybe Index
-indexToWin b s = case x of [] -> Nothing
-                           (_:_) -> Just (head x)
-    where x = testWin b s
-
---Checks if the game can be won in this turn
-testWin :: Board -> PlayerId -> [Index]
-testWin b s = map snd z
+-- gives the index of a random empty tile
+-- would fail if all tiles are set when its called
+randI :: [(Index, Player)] -> [Player] -> Board -> IO Index
+randI hs ps b = randomRIO (0, length es - 1) >>= (\n -> return $ es !! n)
     where
-        x = map (getNinD 5 b) M.allDirections<*>ix
-        y = map (testWin' s) x
-        z = filter ((==True).fst) (zip y ix)
-        ix = filter ((==Empty).(b!)) (range (bounds b))
-
-testWin' :: PlayerId -> ([Tile],[Tile]) -> Bool
-testWin' s (ba,bb) | na + nb >= 4 = True
-                   | otherwise = False
-    where (na,nb) = (countSameDirect ba (Set s), countSameDirect bb (Set s))
-
-countSameDirect :: [Tile] -> Tile -> Int
-countSameDirect []      _t = 0
-countSameDirect (tx:ts) t | tx == t = 1 + countSameDirect ts t
-                          | otherwise = 0
--}
+      es = M.allEmptyIs b
 
 getLineOfTiles ::  Index -> Board -> (Index -> Index) -> [Tile]
 getLineOfTiles i b f| Just ix <- M.inBounds (f i) b = (b!ix) : getLineOfTiles ix b f
@@ -46,11 +27,6 @@ getNinD :: Int -> Board -> Direction -> Index -> ([Tile],[Tile])
 getNinD n b d i = (tk f, tk g)
     where (f,g) = M.dirToFs d
           tk = take n.getLineOfTiles i b
-
-randI :: [(Index, Player)] -> [Player] -> Board -> IO Index
-randI hs ps b = randomRIO (0, length es - 1) >>= (\n -> return $ es !! n)
-    where
-      es = M.allEmptyIs b
 
 -- The function used to determine a good move. But still very much beatable.
 -- Just binding and choosing one of the best
@@ -88,13 +64,21 @@ allValues is b ps = allValuesFor ixs <$> ps
 
 -- Returns a list of all values for one player
 allValuesFor :: [(Index, [([Tile],[Tile])])] -> PlayerId -> [(Index,(Integer,Bool))]
-allValuesFor inp p = s <$> inp --`using` parList rdeepseq
+allValuesFor inp p = s <$> inp `using` parBuffer 100 rdeepseq
+    -- Tested on a longer list than during runtime to show the differences
+    -- Tested with: +RTS -N4 -s
+    -- `using` parBuffer 100 rdeepseq
+    -- no more overflowing sparks and a signifiant speed up and less memory usage
+    -- SPARKS: 320000 (319969 converted, 0 overflowed, 0 dud, 9 GC'd, 22 fizzled)
+    -- with: s <$> inp `using` parBuffer 100 rdeepseq: 1.857s
+    -- `using` parList rdeepseq
     -- without: 5.320s
     -- with (map s inp) `using` parList: 4.559s
     -- a lot of sparks overflow if the list is to long:
     -- SPARKS: 320000 (11217 converted, 308612 overflowed, 0 dud, 0 GC'd, 171 fizzled)
-    -- on smaller lists:
-    -- SPARKS: 800 (629 converted, 0 overflowed, 0 dud, 31 GC'd, 140 fizzled)
+    -- On smaller lists there is nearly no difference in speed or memory usage between
+    -- these two options.
+
     where
       s :: Integral a => (Index, [([Tile],[Tile])]) -> (Index,(a,Bool))
       s (ix, ts) = (ix, valueTile ts p)

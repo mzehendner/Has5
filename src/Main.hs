@@ -31,6 +31,13 @@ main = do
 startLogicLoop :: TVar L.Game -> TVar L.Players -> TVar M.Index -> IO()
 startLogicLoop g p i = void $ L.logic2 p g i
 
+
+{-
+  For testing purposes. No GUI, no loop.
+  Change ghc-options in .cabal file to: -threaded -rtsopts
+  Run executable with: +RTS -Nx -s
+    where x i the number of cores
+-}
 {-
 main = do
   let m = L.check5 M.emptyBoardL
@@ -40,17 +47,20 @@ main = do
   return ()
 -}
 
+
 {-
   Game with GUI
 -}
+
 main = do
   initGUI
   game <- newTVarIO L.gameDefault
   players <- newTVarIO L.playersDefault
   index <- newTVarIO (-1,-1)
   (window, (f, buttons), rs) <- G.setWindow game players index
-  -- updater for Buttons
-  -- TODO Maybe merge these two calls
+  -- TODO Maybe merge the following two calls into one process?
+  -- runs the game logic
   forkIO $ startLogicLoop game players index
+  -- updates the GUI
   forkIO $ G.update game players buttons rs
   mainGUI

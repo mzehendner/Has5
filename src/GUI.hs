@@ -24,14 +24,11 @@ update game' players' bmap (l, _, _)= forever $ do
     buttonsU' <- if length buttonsU == 0 
                  then needUpdateH h bmap b
                  else return buttonsU
-    print $ length buttonsU'
-    if null buttonsU'
-    then return ()
-    else postGUIAsync $ updateButtons b buttonsU' 
+    postGUIAsync $ updateButtons b buttonsU' 
         >> updateStatusLabel l players' game'
     threadDelay 50000
-    -- as few postGUIAsync calls as possible
-    -- otherwise the gui gets laggy    
+    -- as few and short postGUIAsync calls as possible
+    -- otherwise the gui gets unresponsive    
     
 -- Update status label
 updateStatusLabel :: Label -> TVar L.Players -> TVar L.Game -> IO()
@@ -49,6 +46,7 @@ updateStatusLabel l players game = do
 -- updated by comparing the value stored in the button 
 needUpdateH :: L.History -> [(Index,Button)] -> Board -> IO [(Index,Button)]
 needUpdateH [] bmap board = return []
+needUpdateH _  []   _ = return []
 needUpdateH ((i,p):hs) bmap board = case M.getTile i board of 
     Just t -> do
       let b' = lookup i bmap
@@ -202,7 +200,6 @@ comboBoxes ps p inp= do
 cbChanged :: TVar L.Players -> Player -> IO Int-> IO()
 cbChanged players p i' = do
     i <- i'
-    print i
     if i < 0
     then return ()
     else atomically $ change i
@@ -212,19 +209,3 @@ cbChanged players p i' = do
       writeTVar players (L.Players pc (changeTo i p ps))
     changeTo :: Int -> Player -> [(Player, Int)] -> [(Player, Int)]
     changeTo i p0 = map (\p2 -> if fst p2 == p0 then (p0,i) else p2)
-
-{-
-  playersDefault :: Players
-  playersDefault =
-    Players {playerOrder = cycle [p1, p2]
-           , pfindex = [(p1, 2),(p2, 0)]}
-    where p1 = Player 1
-          p2 = Player 2
-
-  possibleFunctions :: [(GetMoveFunction, String)]
-  possibleFunctions =
-      [ (getMoveH ,"Human") -- Change to getMoveH if supposed to start with GUI otherwise getMoveP
-      , (recom ,"Beatable AI")
-      , (randI ,"Random AI")
-      ]
--}

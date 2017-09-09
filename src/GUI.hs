@@ -19,9 +19,10 @@ update :: TVar L.Game -> TVar L.Players -> [(Index,Button)] -> RightSide -> IO()
 update game' players' bmap (l, _, _)= forever $ do
     game@(L.Game gst h b) <- readTVarIO game'
     players <- readTVarIO players'
-    --Check whole board first then history
+    -- checks if the whole board needs to be updated
+    -- if not checks if there was a change in the history
     buttonsU <- needUpdateWholeBoard bmap b
-    buttonsU' <- if length buttonsU == 0 
+    buttonsU' <- if null buttonsU
                  then needUpdateH h bmap b
                  else return buttonsU
     postGUIAsync $ updateButtons b buttonsU' 
@@ -36,7 +37,8 @@ updateStatusLabel l players game = do
   (L.Players (p:_) _)<- readTVarIO players
   (L.Game gst _ _) <- readTVarIO game
   let s = case gst of
-            L.Running -> "Running: Player " ++ show (M.ident p)
+            L.Running -> let pi = M.ident p in "Running: Player " ++
+                            show pi ++ if pi == 1 then " (X)" else " (O)"
             L.Won p1 -> "Player " ++ show (M.ident $ fst p1) ++ " won!"
             L.Draw -> "Draw"
             L.New -> "Running"
@@ -70,7 +72,7 @@ needUpdateH ((i,p):hs) bmap board = case M.getTile i board of
 needUpdateWholeBoard :: [(Index,Button)] -> Board -> IO [(Index,Button)]
 needUpdateWholeBoard bmap board = do
     fs' <- sequence $ fs bmap
-    if any id fs'
+    if or fs'
     then return bmap 
     else return []
   where
@@ -156,27 +158,30 @@ boardButtonPress b varI i = atomically $ writeTVar varI i
 -- Restart-Button, Labels,
 createRightSide :: VBox -> TVar L.Game -> TVar L.Players -> TVar Index -> IO RightSide
 createRightSide vbox game players index = do
-    labelm <- labelNew $ Just "Running: Player 1"
+    fixed <- fixedNew
+    widgetSetSizeRequest fixed 190 400
+    labelm <- labelNew $ Just "Running:"
     hboxlabel <- hBoxNew False 0
     boxPackStart hboxlabel labelm PackNatural 0
+    fixedPut fixed hboxlabel (35,30)
     hbox1 <- hBoxNew False 0
     label1 <- labelNew $ Just "Player 1: "
     comboBox1 <- comboBoxes players (M.Player 1) L.possibleFunctions
     boxPackStart hbox1 label1 PackNatural 0
     boxPackStart hbox1 comboBox1 PackNatural 0
+    fixedPut fixed hbox1 (20, 60)
     hbox2 <- hBoxNew False 0
     label2 <- labelNew $ Just "Player 2: "
     comboBox2 <- comboBoxes players (M.Player 2) L.possibleFunctions
     boxPackStart hbox2 label2 PackNatural 0
     boxPackStart hbox2 comboBox2 PackNatural 0
-    boxPackStart vbox hboxlabel PackNatural 0
-    boxPackStart vbox hbox1 PackNatural 0
-    boxPackStart vbox hbox2 PackNatural 0
+    fixedPut fixed hbox2 (20, 80)
     hbox3 <- hBoxNew False 0
     buttonrestart <- buttonNewWithLabel "Restart"
     onClicked buttonrestart (restart buttonrestart game players index)
     boxPackStart hbox3 buttonrestart PackNatural 0
-    boxPackStart vbox hbox3 PackNatural 0
+    fixedPut fixed hbox3 (60,120)
+    boxPackStart vbox fixed PackNatural 0
     return (labelm, comboBox1, comboBox2)
 
 -- restarts the game by resetting the TVars

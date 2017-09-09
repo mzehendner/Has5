@@ -28,10 +28,6 @@ main = do
 
 -}
 
-startLogicLoop :: TVar L.Game -> TVar L.Players -> TVar M.Index -> IO()
-startLogicLoop g p i = void $ L.logic2 p g i
-
-
 {-
   For testing purposes. No GUI, no loop.
   Change ghc-options in .cabal file to: -threaded -rtsopts
@@ -65,3 +61,6 @@ main = do
   forkIO $ G.update game players buttons rs
   mainGUI
 
+-- Starts the loop
+startLogicLoop :: TVar L.Game -> TVar L.Players -> TVar M.Index -> IO()
+startLogicLoop g p i = void $ L.logic2 p g i

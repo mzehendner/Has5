@@ -36,6 +36,7 @@ data Direction = Horizontal
 
 allDirections = [Horizontal .. Diagonalr]
 
+-- Gives all indices on the board
 allIs :: Board -> [Index]
 allIs b = range $ bounds b
 
@@ -43,7 +44,7 @@ allIs b = range $ bounds b
 inBounds :: Index -> Board -> Maybe Index
 inBounds i b = if inRange (bounds b) i then Just i else Nothing
 
--- Check whether the tile at the index is empty
+-- Checks whether the tile at the index is empty
 maybeEmpty :: Index -> Board -> Maybe Index
 maybeEmpty i b = if isEmpty b i then Just i else Nothing
                
@@ -53,11 +54,13 @@ emptyBoard = array ((0,0),(h',w')) [((i,j),Empty)|j<-[0..h'],i<-[0..w']]
     where w' = width-1
           h' = height-1
 
+-- Gives a large empty board mostly for testing parallelisation
 emptyBoardL :: Board
 emptyBoardL = array ((0,0),(h',w')) [((i,j),Empty)|j<-[0..h'],i<-[0..w']]
     where w' = width^2 - 1
           h' = height^2 - 1
-          
+
+-- Gives a board filled with tiles set by the specified player
 filledBoard :: Player -> Board
 filledBoard p = setBoard is emptyBoard 
     where t = Set $ ident p
@@ -81,7 +84,7 @@ allEmptyIs b = filter ((==Empty).(b!)) (allIs b)
 setBoard :: [(Index, Tile)] -> Board -> Board
 setBoard = flip (//)
 
--- Trys to set the tile at the index
+-- Trys to set the tile at the specified index
 setTile i p = setBoard ls
     where ls = [(i, Set p)]
     
@@ -91,23 +94,24 @@ getTile i b = case inBounds i b of
   Just i -> Just $ b ! i
   Nothing -> Nothing
 
--- Is the tile set by this player?
+-- Is the tile set by this player
 tileSetBy :: Tile -> Player -> Bool
 tileSetBy t p = ident p == playerId t
 
 -- Gives the player
+-- partial
 setBy :: Board -> Index -> Player
 setBy b i = Player $ playerId (b ! i)
     
--- Checks if the tile at the index is set by the
+-- Checks if the tile and the tile at the index are set by the
 -- same player                                 
 setBySame :: Maybe Index -> Tile -> Board -> Bool
 setBySame Nothing  _      _ = False
 setBySame _        Empty  _ = False
 setBySame (Just i) t      b = b ! i == t    
 
--- Shows the board as a sligthly formatted string
--- Shows the board as a sligthly formatted string
+-- Shows the board as a slightly formatted string
+-- Shows the board as a slightly formatted string
 simpleShow :: Board -> String
 simpleShow = (++"\n").reverse.fst.foldr (\x (out,n) 
         -> let s = out ++ "," ++ showT x in 

@@ -5,6 +5,8 @@ import Data.List (sortBy, find)
 import Data.Maybe (fromMaybe)
 import System.Random (randomRIO)
 import Control.Parallel.Strategies
+import Control.Concurrent.STM
+import System.IO.Unsafe
 
 import Material (Player, Board, Direction(..), Tile(..), Index)
 import qualified Material as M
@@ -20,7 +22,7 @@ randI hs ps b = randomRIO (0, length es - 1) >>= (\n -> return $ es !! n)
 
 -- Returns a line of tiles consisting of all tiles at the indices created by the function.
 getLineOfTiles ::  Index -> Board -> (Index -> Index) -> [Tile]
-getLineOfTiles i b f| Just ix <- M.inBounds (f i) b = (b!ix) : getLineOfTiles ix b f
+getLineOfTiles i b f| Just ix <- M.inBounds (Just $ f i) b = (b!ix) : getLineOfTiles ix b f
                     | otherwise = []
 
 -- Gets n-tiles "left" and "right" of the index in the given direction
@@ -36,6 +38,14 @@ recom mli ps b = do --(\mli' -> findBest mli' ps b) <$> return mli
   xs <- (\mli' -> findBest mli' ps b) <$> return mli
   n <- randomRIO (0, length xs - 1)
   return $ fst (xs !! n)
+
+-- TODO Remove need for unsafePerformIO
+recom2 :: Index -> [(Index,Player)] -> [Player] -> Board -> STM Index
+recom2 _ mli ps b = do
+  xs <- (\mli' -> findBest mli' ps b) <$> return mli
+  n <- return $! unsafePerformIO $ randomRIO (0, length xs - 1)
+  return $ fst (xs !! n)
+  --return $ fst $ head xs
 
 -- Returns the best indices and their computed values
 findBest :: [(Index, Player)] -> [Player] -> Board -> [(Index,(Integer,Bool))]
@@ -75,7 +85,6 @@ allValuesFor inp p = vals <$> inp `using` parBuffer 100 rdeepseq
     -- SPARKS: 320000 (11217 converted, 308612 overflowed, 0 dud, 0 GC'd, 171 fizzled)
     -- On smaller lists there is nearly no difference in speed or memory usage between
     -- these two options.
-
     where
       vals :: Integral a => (Index, [([Tile],[Tile])]) -> (Index,(a,Bool))
       vals (ix, ts) = (ix, valueTile ts p)

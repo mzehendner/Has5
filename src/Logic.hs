@@ -9,10 +9,12 @@ import Control.Concurrent.STM
 import Control.Concurrent.STM.TVar
 import Control.Parallel.Strategies
 import Control.Monad
+import Control.DeepSeq
+--import System.IO.Unsafe
 
 
 type History = [(Index, Player)]
-type GetMoveFunction = (TVar Index -> History -> [Player] ->  Board -> IO Index)
+type GetMoveFunction = (Index -> History -> [Player] ->  Board -> STM Index)
 type PlayerFunctions = [(Player, GetMoveFunction)]
 
 data GameState = New | Running | Draw | Won {winner :: (Player, (Index,Direction))}
@@ -25,9 +27,17 @@ data Game = Game {
     }
     deriving (Eq)
 
--- Make Player Order a seperate type and try to synchronize it with something else than STM vielleicht eine MVar?
+instance Show Game where
+  show (Game gst hs _) = show gst ++ " " ++ show hs
+
 data Players = Players {playerOrder :: [Player], pfindex :: [(Player,Int)]}
-  deriving (Eq,Show)
+  deriving (Show)
+
+instance Eq Players where
+  (==) (Players (p10:p11:p12:_) pfi1) (Players (p20:p21:p22:_) pfi2) = p10 == p20 && p11 == p21 && p12 == p22 && pfi1 == pfi2
+
+
+data StateVars = StateVars {tplayers :: TVar Players, tgame :: TVar Game, tindex :: TVar Index}
 
 -- A new game. Used on start and for restarting.
 gameDefault :: Game
@@ -48,14 +58,15 @@ playersDefault =
 -- and their String representation for ComboBoxes in the GUI
 possibleFunctions :: [(String, GetMoveFunction)]
 possibleFunctions =
-    [ ("Human",getMoveH) -- Change to getMoveH if supposed to start with GUI otherwise getMoveP
-    , ("Beatable AI",recom)
-    , ("Random AI", randI)
+    [ ("Human",getMoveH2) -- Change to getMoveH if supposed to start with GUI otherwise getMoveP
+    , ("Beatable AI",R.recom2)
+    --, ("Random AI", randI)
     ]
 
+{- Probably Broken
 -- Old logic, updated logic under logic2
 logic :: TVar Players -> TVar Game -> TVar Index -> IO ()
-logic players game index = forever $ do
+logic players game index = do
     p@(Players ps pf) <- readTVarIO players
     g@(Game gst' h b) <- readTVarIO game
     let gst = checkGameSt (check5 b)  b
@@ -93,13 +104,8 @@ logic players game index = forever $ do
           writeTVar players (Players r pf)
           let b' = M.setTile i (ident p0) b
           writeTVar game (Game gst' h b')
-
--- Actual loop for the logic
--- TODO Change type to (TVar Index -> History -> [Player] ->  Board -> STM Index) and replace calls to Random in Recommmender
--- Maybe can be cleaned up by removing the need for IO in GetMoveFunctions
--- would need another Random Number Generator or the use of unsafePerformIO
--- Would probably make the STM work better by not having to use readTVarIO
--- and thus being able to execute the whole loop in STM
+-}
+{- BROKEN
 logic2 :: TVar Players -> TVar Game -> TVar Index -> IO ()
 logic2 players game index = forever $ do
     -- Check whether the game has been won or reset
@@ -116,15 +122,15 @@ logic2 players game index = forever $ do
         let pfunction = findFunction pc pfi
         i <- pfunction index h pc b
         let b' = M.setTile i (ident p0) b
-        case M.inBounds i b >>= flip M.maybeEmpty b of
-          Nothing -> return ()
+        case M.inBounds (Just i) b >>= flip M.maybeEmpty b of
+          Nothing -> return()
           Just i -> atomically $ do
-            b <- hasChanged g p game players
-            if b
+            bool <- hasChanged g p game players
+            if bool
             then return()
             else writeTVar game (Game gst ((i,p0):h) b') >>
                             writeTVar players (Players r pfi)
-    threadDelay 100000 -- Pauses till the next execution. Otherwise the moves by the AI are easily overlooked.
+    threadDelay 1000000 -- Pauses till the next execution. Otherwise the moves by the AI are easily overlooked.
   where
     findFunction (p:_) pf = case lookup p pf of
                   Just x -> snd $ possibleFunctions !! x
@@ -134,7 +140,48 @@ logic2 players game index = forever $ do
         g' <- readTVar game
         p' <- readTVar player
         return False -- $ g == g' && p' == p
+-}
 
+-- cleaned logic
+logic3 :: StateVars -> IO ()
+logic3 s = forever $ threadDelay 100000 >> atomically (do
+    players <- readTVar $ tplayers s
+    game@(Game gst hs b) <- readTVar $ tgame s
+    let gamestate = checkGameSt' gst (check5 b) b
+    case gamestate of
+      Draw -> retry
+      Won _ -> retry
+      New -> reset s
+      Running -> move s)
+  where
+    reset :: StateVars -> STM ()
+    reset s = do
+      writeTVar (tgame s) (Game Running [] M.emptyBoard)-- gameDefault {gameSt = Running}
+      (Players _ pfis) <- readTVar (tplayers s)
+      writeTVar (tplayers s) playersDefault {pfindex = pfis}
+      writeTVar (tindex s) (-1,-1)
+
+    move :: StateVars -> STM ()
+    move s = do
+      players@(Players pa@(p:ps) pf) <- readTVar $ tplayers s
+      game@(Game _ hs b) <- readTVar $ tgame s
+      index <- readTVar $ tindex s
+      let f = findFunction players
+      indexNew <- f index hs pa b
+      --return $! unsafePerformIO $ print indexNew
+      case M.inBounds (Just indexNew) b >>= flip M.maybeEmpty b of
+        Nothing -> retry
+        Just i -> do
+          let b' = M.setTile i (ident p) b
+          writeTVar (tgame s) (game {gameSt = checkGameSt (check5 b') b', history = (i, p):hs, board = M.setTile i (ident p) b})
+          writeTVar (tplayers s) (players {playerOrder = ps})
+          writeTVar (tindex s) (-1,-1)
+
+    -- (Index -> Game -> Players -> STM Index)
+    findFunction :: Players -> GetMoveFunction
+    findFunction (Players (p:_) pf) = case lookup p pf of
+                      Just x -> snd $ possibleFunctions !! x
+                      Nothing -> snd $ head possibleFunctions
 
 -- Sets the GameState in the TVar after checking whether it should be changed
 setGameStateInTVar :: TVar Game -> STM()
@@ -147,6 +194,10 @@ setGameStateInTVar game = do
     else
       writeTVar game (Game Running h b)
 
+-- Checks whether the game is over, still running or new
+checkGameSt' :: GameState -> [(Index, Direction)] -> Board -> GameState
+checkGameSt' New _ _ = New
+checkGameSt' _   x y = checkGameSt x y
 
 -- Checks whether the game is over or still ongoing
 checkGameSt :: [(Index, Direction)] -> Board -> GameState
@@ -154,12 +205,15 @@ checkGameSt []    b | M.anyEmpty b =  Running
                     | otherwise = Draw
 checkGameSt (x:_) b = Won {winner = (M.setBy b (fst x),x)}
 
+getMoveH2 :: Index -> History -> [Player] -> Board -> STM Index
+getMoveH2 index _ _ _ = return index
+
 -- Gets the next button press by the user as input
 getMoveH :: TVar Index -> History -> [Player] -> Board -> IO Index
 getMoveH varI h ps b = do
       --threadDelay 1000000
       index <- readTVarIO varI
-      if index == (-1,-1)
+      if index /= (-1,-1)
       then atomically $ setM >> return index
       else return index
     where
@@ -168,7 +222,7 @@ getMoveH varI h ps b = do
 -- Gets a move by querying input trough the command line.
 getMoveP :: TVar Index -> History -> [Player] -> Board -> IO Index
 getMoveP t h ps b = getIndex b >>=
-        (\i -> case M.inBounds i b >>= flip M.maybeEmpty b
+        (\i -> case M.inBounds (Just i) b >>= flip M.maybeEmpty b
                of Just ix -> return ix
                   Nothing -> getMoveP t h ps b)
     where
@@ -220,7 +274,7 @@ check5inLine :: Board -> (Index -> Index) -> Index -> Maybe Index
 check5inLine b = ch (Nothing, Empty, 0)
     where ch :: (Maybe Index,Tile,Int) -> (Index->Index) -> Index -> Maybe Index
           ch (mi,t,5) _f _i = mi
-          ch (mi,t,n) f i   | a@(Just ix) <- inBounds' i
+          ch (mi,t,n) f i   | a@(Just ix) <- inBounds' (Just i)
                                     = if M.setBySame a t b
                                         then ch (mi,t,n+1) f (f ix)
                                         else ch (Just i,b!i,1) f (f ix)

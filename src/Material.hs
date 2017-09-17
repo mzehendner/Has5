@@ -41,8 +41,9 @@ allIs :: Board -> [Index]
 allIs b = range $ bounds b
 
 -- Checks whether the index is in bounds
-inBounds :: Index -> Board -> Maybe Index
-inBounds i b = if inRange (bounds b) i then Just i else Nothing
+inBounds :: Maybe Index -> Board -> Maybe Index
+inBounds Nothing _ = Nothing
+inBounds (Just i) b = if inRange (bounds b) i then Just i else Nothing
 
 -- Checks whether the tile at the index is empty
 maybeEmpty :: Index -> Board -> Maybe Index
@@ -90,7 +91,7 @@ setTile i p = setBoard ls
     
 -- Trys to get the tile at the specified index
 getTile :: Index -> Board -> Maybe Tile
-getTile i b = case inBounds i b of
+getTile i b = case inBounds (Just i) b of
   Just i -> Just $ b ! i
   Nothing -> Nothing
 

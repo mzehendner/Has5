@@ -10,8 +10,7 @@ executable has5
                      , Recommender
                      , Material
                      , GUI
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -fno-omit-yields
-  --ghc-options:         -threaded -rtsopts
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -fwarn-unused-binds
   build-depends:       base >= 4.7 && < 5
                      , array
                      , random

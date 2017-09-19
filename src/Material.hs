@@ -1,4 +1,25 @@
-module Material where
+module Material
+  (
+    Player (..)
+  , Board
+  , Index
+  , Tile (..)
+  , Direction (..)
+  , inBounds
+  , dirToFs
+  , allEmptyIs
+  , allDirections
+  , setBy
+  , setBySame
+  , left, right, up, down
+  , emptyBoard
+  , maybeEmpty
+  , setTile
+  , anyEmpty
+  , allIs
+  , getTile
+  )
+  where
 
 import Data.Array
 
@@ -16,7 +37,10 @@ newtype Player = Player {ident :: Int}
 type Index = (Int,Int)
 type Board = Array Index Tile
 --Dimension of the Gameboard
+width :: Int
 width = 20
+
+height :: Int
 height = 20
 
 data Tile = Empty 
@@ -34,6 +58,7 @@ data Direction = Horizontal
                | Diagonalr
                deriving (Show, Eq, Enum)
 
+allDirections :: [Direction]
 allDirections = [Horizontal .. Diagonalr]
 
 -- Gives all indices on the board
@@ -61,12 +86,6 @@ emptyBoardL = array ((0,0),(h',w')) [((i,j),Empty)|j<-[0..h'],i<-[0..w']]
     where w' = width^2 - 1
           h' = height^2 - 1
 
--- Gives a board filled with tiles set by the specified player
-filledBoard :: Player -> Board
-filledBoard p = setBoard is emptyBoard 
-    where t = Set $ ident p
-          is = [(i,t)|i<-indices emptyBoard]
-
 -- Checks whether the tile at the specified index is empty
 isEmpty :: Board -> Index -> Bool
 isEmpty b i = Empty==(b!i)
@@ -86,6 +105,7 @@ setBoard :: [(Index, Tile)] -> Board -> Board
 setBoard = flip (//)
 
 -- Trys to set the tile at the specified index
+setTile :: Index -> Int -> Board -> Board
 setTile i p = setBoard ls
     where ls = [(i, Set p)]
     
@@ -94,10 +114,6 @@ getTile :: Index -> Board -> Maybe Tile
 getTile i b = case inBounds (Just i) b of
   Just i -> Just $ b ! i
   Nothing -> Nothing
-
--- Is the tile set by this player
-tileSetBy :: Tile -> Player -> Bool
-tileSetBy t p = ident p == playerId t
 
 -- Gives the player
 -- partial
@@ -111,24 +127,17 @@ setBySame Nothing  _      _ = False
 setBySame _        Empty  _ = False
 setBySame (Just i) t      b = b ! i == t    
 
--- Shows the board as a slightly formatted string
--- Shows the board as a slightly formatted string
-simpleShow :: Board -> String
-simpleShow = (++"\n").reverse.fst.foldr (\x (out,n) 
-        -> let s = out ++ "," ++ showT x in 
-           if n < (width-1) then (s, n+1) else (s ++ "\n", 0)
-        ) ("",0)
-    where
-      showT Empty = " "
-      showT (Set p) = show p
-      
 -- Functions to get an adjacent index on the board
 changeIndex :: (Int->Int,Int->Int) -> Index -> Index
 changeIndex (f,g) (a,b) = (f a, g b)
 
+up :: Index -> Index
 up = changeIndex ((+(-1)),id)
+down :: Index -> Index
 down = changeIndex ((+1),id)
+left :: Index -> Index
 left = changeIndex (id,(+(-1)))
+right :: Index -> Index
 right = changeIndex (id,(+1))
 
 -- Gives the pair of function to get adjacent indices in one direction

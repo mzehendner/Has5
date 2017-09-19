@@ -1,8 +1,12 @@
-module Recommender where
+module Recommender
+  (
+    random
+  , recom
+  )
+  where
 
 import Data.Array
 import Data.List (sortBy, find)
-import Data.Maybe (fromMaybe)
 import System.Random (randomRIO)
 import Control.Parallel.Strategies
 import Control.Concurrent.STM
@@ -13,12 +17,6 @@ import qualified Material as M
 
 type PlayerId = Int
 
--- gives the index of a random empty tile
--- would fail if all tiles are set when its called
-randI :: [(Index, Player)] -> [Player] -> Board -> IO Index
-randI hs ps b = randomRIO (0, length es - 1) >>= (\n -> return $ es !! n)
-    where
-      es = M.allEmptyIs b
 
 -- Returns a line of tiles consisting of all tiles at the indices created by the function.
 getLineOfTiles ::  Index -> Board -> (Index -> Index) -> [Tile]
@@ -31,35 +29,30 @@ getNinD n b d i = (tk f, tk g)
     where (f,g) = M.dirToFs d
           tk = take n.getLineOfTiles i b
 
--- The function used to determine a good move.
--- Chooses randomly between equally good moves.
-recom :: [(Index, Player)] -> [Player] -> Board -> IO Index
-recom mli ps b = do --(\mli' -> findBest mli' ps b) <$> return mli
-  xs <- (\mli' -> findBest mli' ps b) <$> return mli
-  n <- randomRIO (0, length xs - 1)
-  return $ fst (xs !! n)
+-- gives the index of a random empty tile
+-- would fail if all tiles are set when its called
+-- TODO Remove need for unsafePerformIO
+random :: Index -> [(Index,Player)] -> [Player] -> Board -> STM Index
+random _ _ _ b = return $ unsafePerformIO $ randomRIO (0, length es - 1) >>= (\n -> return $ es !! n)
+    where
+      es = M.allEmptyIs b
 
 -- TODO Remove need for unsafePerformIO
-recom2 :: Index -> [(Index,Player)] -> [Player] -> Board -> STM Index
-recom2 _ mli ps b = do
+recom :: Index -> [(Index,Player)] -> [Player] -> Board -> STM Index
+recom _ mli ps b = do
   xs <- (\mli' -> findBest mli' ps b) <$> return mli
   n <- return $! unsafePerformIO $ randomRIO (0, length xs - 1)
   return $ fst (xs !! n)
-  --return $ fst $ head xs
 
 -- Returns the best indices and their computed values
 findBest :: [(Index, Player)] -> [Player] -> Board -> [(Index,(Integer,Bool))]
-findBest mli ps b = allBest $ sortBy (\(_,(n1,_)) (_,(n2,_)) -> compare n1 n2) combinedValues
+findBest _ ps b = allBest $ sortBy (\(_,(n1,_)) (_,(n2,_)) -> compare n1 n2) combinedValues
     where
       allE = M.allEmptyIs b
        -- combines the values for all players
       combinedValues = f1 $ allValues allE b (map M.ident ps)
       allBest (x:xs)= x : takeWhile ((==snd x).snd) xs
-
--- Checks whether any of the booleans is true and if so it returns the index of the first
-findAnyTrue :: [(Index,(a,Bool))] -> Maybe Index
-findAnyTrue xs | Just (i, _) <- find (snd.snd) xs = Just i
-               | otherwise = Nothing
+      allBest [] = []
 
 -- Returns a list of lists of values for each player
 allValues :: [Index] -> Board -> [PlayerId] -> [[(Index,(Integer,Bool))]]
@@ -122,7 +115,7 @@ minimalTurns ts p = minimum $ minimalTurns' ts
 
 --Gives the biggest connected line that can be reached
 longestReachable :: Integral a => ([Tile],[Tile]) -> PlayerId -> a
-longestReachable ts@(as, bs) p = maximum $ longestR $ conv f ts p
+longestReachable ts p = maximum $ longestR $ conv f ts p
     where
       f = (`elem` [Set p, Empty])
       longestR :: Integral a => [Tile] -> [a]
@@ -142,12 +135,6 @@ forDirections :: Board -> Index -> [([Tile],[Tile])]
 forDirections b i = fs <*> [i]
     where
       fs = map (getNinD 4 b) M.allDirections
-
---Sorts by value.
-sortPosByVal :: Index -> [(Index, (Int, Bool))] -> [(Index, (Int, Bool))]
-sortPosByVal i = sortBy f
-    where
-      f (ix1, (n1,_)) (ix2,(n2,_)) = compare n1 n2
 
 --Function that gives an integer value determining if it's a valuable
 --position or not and whether 5 can be connected at this index.

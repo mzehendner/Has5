@@ -1,12 +1,17 @@
-module GUI where
+module GUI
+  (
+    update
+  , setWindow
+  )
+  where
 
 import Graphics.UI.Gtk
-import Control.Concurrent
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM
-import Control.Monad
+import Control.Monad (forever, foldM)
 import Data.Array (assocs)
-import qualified Data.Text as T
-import System.IO.Unsafe
+import Data.Text (pack)
+import System.IO.Unsafe (unsafePerformIO)
 
 import Material (Index, Board, Tile(..), Player(..))
 import Logic (StateVars (..), tindex, tgame, tplayers)
@@ -16,12 +21,12 @@ import qualified Logic as L
 type LeftSide = (Fixed, [(Index, Button)])
 type RightSide = (Label, ComboBox, ComboBox)
 
--- updates the GUI
+-- Updates the GUI
+-- TODO change [(Index, Button)] to a map
 update :: StateVars -> [(Index,Button)] -> RightSide -> IO()
 update s bmap (l, _, _)= forever
     (atomically (do
-        game@(L.Game gst h b) <- readTVar (tgame s)
-        players <- readTVar (tplayers s)
+        (L.Game _gst h b) <- readTVar (tgame s)
         buttonsU1 <- needUpdateWholeBoard bmap b
         buttonsU2 <- needUpdateH h bmap b
         let isNull1 = null buttonsU1
@@ -33,22 +38,6 @@ update s bmap (l, _, _)= forever
       >>= (\ (b,buttons) -> postGUIAsync $ updateButtons b buttons
       >> updateStatusLabel l s) >> threadDelay 100000
     )
-{-
-  do
-    game@(L.Game gst h b) <- readTVarIO (tgame s)
-    players <- readTVarIO (tplayers s)
-    -- checks if the whole board needs to be updated
-    -- if not checks if there was a change in the history
-    buttonsU <- needUpdateWholeBoard bmap b
-    buttonsU' <- if null buttonsU
-                 then needUpdateH h bmap b
-                 else return buttonsU
-    postGUIAsync $ updateButtons b buttonsU' 
-        >> updateStatusLabel l s
-    threadDelay 50000
-    -- as few and short postGUIAsync calls as possible
-    -- otherwise the GUI gets unresponsive
--}
 
 -- Update status label
 updateStatusLabel :: Label -> StateVars -> IO()
@@ -57,20 +46,20 @@ updateStatusLabel l s = do
     a <- readTVar $ tplayers s
     b <- readTVar $ tgame s
     return (a,b)
-  let s = case gst of
-            L.Running -> let pi = M.ident p in "Running: Player " ++
-                            show pi ++ if pi == 1 then " (X)" else " (O)"
+  let labelnew = case gst of
+            L.Running -> let pindex = M.ident p in "Running: Player " ++
+                            show pindex ++ if pindex == 1 then " (X)" else " (O)"
             L.Won p1 -> "Player " ++ show (M.ident $ fst p1) ++ " won!"
             L.Draw -> "Draw"
             L.New -> "Running"
-  labelSetText l s
+  labelSetText l labelnew
 
 -- Find indexes from the history that need to be
 -- updated by comparing the value stored in the button 
 needUpdateH :: L.History -> [(Index,Button)] -> Board -> STM [(Index,Button)]
-needUpdateH [] bmap board = return []
+needUpdateH [] _bmap _board = return []
 needUpdateH _  []   _ = return []
-needUpdateH ((i,p):hs) bmap board = case M.getTile i board of 
+needUpdateH ((i,_p):hs) bmap board = case M.getTile i board of
     Just t -> do
       let b' = lookup i bmap
       case b' of 
@@ -105,6 +94,7 @@ needUpdateWholeBoard bmap board = do
                 Nothing -> return False) 
              (M.allEmptyIs board)
 
+tileSigns :: [(M.Tile, String)]
 tileSigns = [(M.Empty, " "),(M.Set 1, "X"),(M.Set 2, "O")]
 
 -- Updates the labels on the buttons according to the board
@@ -117,9 +107,9 @@ updateButtons b bmap = mapM_ (changeLabel bmap) (assocs b)
       case button of
         Just button' -> buttonSetLabel button' (lab t)
         Nothing -> return()
-    lab Empty = " "
     lab (Set 1) = "X"
     lab (Set 2) = "O"
+    lab _Empty = " "
     -- pLabels = ["","X","O"]
 
 -- Creates the window and everything inside it.
@@ -135,7 +125,7 @@ setWindow s = do
     set window [windowDefaultWidth := 500, windowDefaultHeight := 440,
                 containerBorderWidth := 0, containerChild := hbox,
                 windowTitle := "Has5"]
-    onDestroy window mainQuit
+    _ <- onDestroy window mainQuit
     vsep <- vSeparatorNew
     hsep <- hSeparatorNew
     rs <- createRightSide vboxr s
@@ -150,12 +140,6 @@ setWindow s = do
 -- Creates the buttons for the board
 createBoard :: StateVars -> Fixed -> Board -> IO [(Index,Button)]
 createBoard s fixed b =
-{-    foldr (\i out -> do n <- oneButton varI fixed i
-                        o <- out
-                        return (n:o))
-          (return [])
-          (M.allIs b)
--}
     foldM (\o i -> do n <- boardButton s fixed i
                       return ((i,n):o))
           []
@@ -165,7 +149,7 @@ createBoard s fixed b =
 boardButton :: StateVars -> Fixed -> Index -> IO Button
 boardButton  s fixed index@(x,y)= do
     b <- buttonNew
-    onClicked b (boardButtonPress b s index) -- FIXME deprecated function onClicked
+    _ <- onClicked b (boardButtonPress b s index) -- FIXME deprecated function onClicked
     fixedPut fixed b (y*24,x*24)
     widgetSetSizeRequest b 24 24
     return b
@@ -173,7 +157,7 @@ boardButton  s fixed index@(x,y)= do
 -- Handles the button presses
 -- Sets the TVar to the index of the pressed button
 boardButtonPress :: Button -> StateVars -> Index -> IO ()
-boardButtonPress b s i = return (putStrLn "buttonPressed") >> atomically $ writeTVar (tindex s) i
+boardButtonPress _b s i = return (putStrLn "buttonPressed") >> atomically $ writeTVar (tindex s) i
 
 -- Create settings panel
 -- Restart-Button, Labels,
@@ -199,24 +183,23 @@ createRightSide vbox s = do
     fixedPut fixed hbox2 (20, 80)
     hbox3 <- hBoxNew False 0
     buttonrestart <- buttonNewWithLabel "Restart"
-    onClicked buttonrestart (restart buttonrestart s)
+    _ <- onClicked buttonrestart (restart buttonrestart s)
     boxPackStart hbox3 buttonrestart PackNatural 0
     fixedPut fixed hbox3 (60,120)
     boxPackStart vbox fixed PackNatural 0
     return (labelm, comboBox1, comboBox2)
 
--- restarts the game by resetting the TVars
+-- restarts the game by resetting the game TVar
 restart :: Button -> StateVars -> IO()
-restart b s = atomically $ do
-  game <- readTVar (tgame s)
+restart _b s = atomically $
   writeTVar (tgame s) L.gameDefault
     
 -- gives a combo box that allows the user to swap the playerfunctions
-comboBoxes :: StateVars -> Player -> [(String, L.GetMoveFunction)] -> IO ComboBox
+comboBoxes :: StateVars -> Player -> [(String, L.MoveFunction)] -> IO ComboBox
 comboBoxes s p inp= do
     cb <- comboBoxNewText
-    mapM_  (comboBoxAppendText cb .T.pack.fst) inp
-    onChanged cb (cbChanged s p (comboBoxGetActive cb)) -- FIXME deprecated Function onChanged
+    mapM_  (comboBoxAppendText cb . pack.fst) inp
+    _ <- onChanged cb (cbChanged s p (comboBoxGetActive cb)) -- FIXME deprecated Function onChanged
     comboBoxSetActive cb 0
     return cb
 

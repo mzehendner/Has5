@@ -8,22 +8,22 @@ module GUI
 import Graphics.UI.Gtk
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM
-import Control.Monad (forever, foldM)
+import Control.Monad (forever, foldM, liftM)
 import Data.Array (assocs)
 import Data.Text (pack)
 import System.IO.Unsafe (unsafePerformIO)
+import qualified Data.Map.Strict as Map
 
 import Material (Index, Board, Tile(..), Player(..))
 import Logic (StateVars (..), tindex, tgame, tplayers)
 import qualified Material as M
 import qualified Logic as L
 
-type LeftSide = (Fixed, [(Index, Button)])
+type LeftSide = (Fixed, Map.Map Index Button)
 type RightSide = (Label, ComboBox, ComboBox)
 
 -- Updates the GUI
--- TODO change [(Index, Button)] to a map
-update :: StateVars -> [(Index,Button)] -> RightSide -> IO()
+update :: StateVars -> Map.Map Index Button -> RightSide -> IO()
 update s bmap (l, _, _)= forever
     (atomically (do
         (L.Game _gst h b) <- readTVar (tgame s)
@@ -56,12 +56,11 @@ updateStatusLabel l s = do
 
 -- Find indexes from the history that need to be
 -- updated by comparing the value stored in the button 
-needUpdateH :: L.History -> [(Index,Button)] -> Board -> STM [(Index,Button)]
+needUpdateH :: L.History -> Map.Map Index Button -> Board -> STM [(Index,Button)]
 needUpdateH [] _bmap _board = return []
-needUpdateH _  []   _ = return []
 needUpdateH ((i,_p):hs) bmap board = case M.getTile i board of
     Just t -> do
-      let b' = lookup i bmap
+      let b' = Map.lookup i bmap
       case b' of 
         Nothing -> return []
         Just b-> do
@@ -79,15 +78,15 @@ needUpdateH ((i,_p):hs) bmap board = case M.getTile i board of
 -- If any empty tile on the board is not set to " " 
 -- update all buttons.
 -- Removes the slowdown after a restart
-needUpdateWholeBoard :: [(Index,Button)] -> Board -> STM [(Index,Button)]
+needUpdateWholeBoard :: Map.Map Index Button -> Board -> STM [(Index,Button)]
 needUpdateWholeBoard bmap board = do
     fs' <- sequence $ fs bmap
     if or fs'
-    then return bmap 
+    then return $ Map.toList bmap
     else return []
   where
-    fs :: [(Index, Button)] -> [STM Bool]
-    fs bmap' = map (\i -> case lookup i bmap' of 
+    fs :: Map.Map Index Button -> [STM Bool]
+    fs bmap' = map (\i -> case Map.lookup i bmap' of
                 Just b -> do 
                     let blabel = unsafePerformIO $ buttonGetLabel b
                     return $ blabel /= " "
@@ -122,6 +121,7 @@ setWindow s = do
     hbox <- hBoxNew False 0
     fixed <- fixedNew
     bs <- createBoard s fixed M.emptyBoard
+    let buttonmap = Map.fromList bs
     set window [windowDefaultWidth := 500, windowDefaultHeight := 440,
                 containerBorderWidth := 0, containerChild := hbox,
                 windowTitle := "Has5"]
@@ -135,15 +135,13 @@ setWindow s = do
     boxPackStart hbox vsep PackNatural 0
     boxPackStart hbox vboxr PackGrow 0
     widgetShowAll window
-    return (window, (fixed, bs), rs)
+    return (window, (fixed, buttonmap), rs)
 
 -- Creates the buttons for the board
 createBoard :: StateVars -> Fixed -> Board -> IO [(Index,Button)]
-createBoard s fixed b =
-    foldM (\o i -> do n <- boardButton s fixed i
-                      return ((i,n):o))
-          []
-          (M.allIs b)
+createBoard s fixed b = foldM (\o i -> do
+      n <- boardButton s fixed i
+      return ((i,n):o)) [] (M.allIs b)
 
 -- Creates one button for the board
 boardButton :: StateVars -> Fixed -> Index -> IO Button
